@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CloudSched – OS Demo</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1d2430;--mu:#5d6778;--bd:#d9dde5;--ac:#1f6feb;--ok:#1a7f37;--bad:#c62828;--warn:#b26a00}
+@media(prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1d222a;--tx:#e6e9ef;--mu:#9aa4b5;--bd:#333b48;--ac:#5b9dff;--ok:#4cc16d;--bad:#ff7b7b;--warn:#e0a040}}
+body{margin:0;font:14px/1.45 system-ui,Segoe UI,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:14px 20px;border-bottom:1px solid var(--bd);background:var(--card)}
+header h1{margin:0;font-size:18px}header p{margin:2px 0 0;color:var(--mu);font-size:12px}
+main{max-width:1100px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:14px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tabs button{padding:7px 12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:6px;cursor:pointer}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+textarea,input,select{font:13px ui-monospace,Consolas,monospace;background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:5px;padding:5px}
+textarea{width:100%;box-sizing:border-box;min-height:110px}
+button.run{background:var(--ac);color:#fff;border:0;border-radius:6px;padding:8px 16px;cursor:pointer;font-weight:600}
+label{margin-right:12px;color:var(--mu);font-size:12px;display:inline-block}
+.row{margin:8px 0}table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--bd);padding:5px 8px;text-align:right}th:first-child,td:first-child{text-align:left}
+tr.best td{background:rgba(31,111,235,.14);font-weight:600}
+.gantt{display:flex;height:34px;border:1px solid var(--bd);border-radius:4px;overflow:hidden;margin-top:8px}
+.seg{display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;overflow:hidden;border-right:1px solid rgba(255,255,255,.5)}
+.ticks{display:flex;font-size:10px;color:var(--mu)}.ticks span{overflow:hidden;text-align:left}
+.kv{display:flex;gap:18px;flex-wrap:wrap;margin:8px 0}.kv div{background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:6px 12px}
+.kv b{display:block;font-size:16px}.mu{color:var(--mu);font-size:12px}
+.err{color:var(--bad);font-weight:600}.badge{display:inline-block;padding:3px 10px;border-radius:12px;color:#fff;font-weight:700}
+.bar{height:10px;background:var(--ac);border-radius:3px}.track{position:relative;height:16px;background:var(--bg);border-radius:3px}
+.track i{position:absolute;top:2px;height:12px;border-radius:3px}
+.hide{display:none}
+</style></head><body>
+<header><h1>CloudSched – Operating Systems demo</h1>
+<p>Real scheduling / resource / deadlock algorithms running in Python. A <b>simulation</b>: results are for the workload you enter, not a real OS or hypervisor. No database needed for this demo.</p></header>
+<main>
+<div class="tabs" id="tabs"></div>
+
+<section id="t-sched" class="tab">
+ <div class="card"><b>Workload</b> <select id="preset"></select>
+  <div class="mu">One job per line: <code>pid,arrival,burst,priority[,deadline]</code> — priority 1 = highest. Time in simulation units.</div>
+  <textarea id="jobs"></textarea></div>
+ <div class="card"><b>CPU scheduling</b>
+  <div class="row"><label>Algorithm <select id="algo"><option>FCFS</option><option>SJF</option><option>PRIORITY</option><option value="RR">Round Robin</option><option value="PRIORITY_AGING">Priority + aging</option></select></label>
+  <label>Quantum <input id="q" type="number" value="2" min="1" style="width:60px"></label>
+  <label>Aging interval <input id="iv" type="number" value="10" min="1" style="width:60px"></label>
+  <button class="run" onclick="runSched()">Run</button></div><div id="o-sched"></div></div>
+ <div class="card"><b>Compare all algorithms &amp; recommend</b>
+  <div class="mu">Weights (normalised to sum 1; configurable). Deadline weight grows with the share of jobs that have deadlines.</div>
+  <div class="row" id="weights"></div>
+  <button class="run" onclick="runRec()">Compare &amp; recommend</button>
+  <button class="run" style="background:var(--ok)" onclick="runAllPresets()">Run on every preset</button>
+  <div id="o-rec"></div></div>
+</section>
+
+<section id="t-res" class="tab hide"><div class="card"><b>Resource management (shared CPU / RAM / storage)</b>
+ <div class="mu">Jobs run concurrently while resources last; otherwise they wait. Resources are released exactly once; invariants are checked on every step. <code>pid,arrival,burst,priority,cpu,ram_mb,storage_mb</code></div>
+ <div class="row"><label>CPU <input id="hc" type="number" value="4" style="width:70px"></label><label>RAM MB <input id="hr" type="number" value="8192" style="width:90px"></label>
+ <label>Storage MB <input id="hs" type="number" value="2000" style="width:90px"></label>
+ <label>Policy <select id="pol"><option>FCFS</option><option>SJF</option><option>PRIORITY</option><option value="PRIORITY_AGING">PRIORITY_AGING (reserves for aged job)</option></select></label>
+ <label>Aging interval <input id="civ" type="number" value="3" style="width:60px"></label></div>
+ <textarea id="cjobs"></textarea><div class="row"><button class="run" onclick="runCluster()">Simulate</button></div><div id="o-res"></div></div></section>
+
+<section id="t-bank" class="tab hide"><div class="card"><b>Banker's Algorithm (deadlock avoidance)</b>
+ <div class="mu">Resource types A, B, C. Edit the state, then test a request. Outcomes: GRANTED (safe) · DEFERRED_UNSAFE · DEFERRED_UNAVAILABLE · INVALID (exceeds declared max). Models only these declared resources.</div>
+ <div class="row"><label>Available</label><input id="b-av" style="width:140px"></div>
+ <div class="row"><label>Max (JSON)</label><textarea id="b-max" style="min-height:60px"></textarea></div>
+ <div class="row"><label>Allocation (JSON)</label><textarea id="b-al" style="min-height:60px"></textarea></div>
+ <div class="row"><label>Process <input id="b-pid" value="P1" style="width:60px"></label><label>Request <input id="b-rq" value="1,0,2" style="width:100px"></label>
+ <button class="run" onclick="runBank()">Check state &amp; request</button></div><div id="o-bank"></div></div></section>
+
+<section id="t-age" class="tab hide"><div class="card"><b>Starvation prevention – priority aging</b>
+ <div class="mu">Job L (priority 10, burst 1) arrives at t=0 together with a stream of 100 priority-1 jobs (burst 5, one every 5 units). Aging improves a waiting job by 1 priority level per interval.</div>
+ <div class="row"><label>Aging interval <input id="aiv" type="number" value="10" style="width:70px"></label><button class="run" onclick="runAge()">Run demo</button></div><div id="o-age"></div></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);let PRE;
+const color=p=>{let h=0;for(const c of p)h=(h*31+c.charCodeAt(0))%360;return `hsl(${h},55%,42%)`};
+const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+async function call(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!r.ok)throw new Error(j.error||'request failed');return j}
+const csv=(t,keys)=>t.trim().split('\n').filter(l=>l.trim()).map(l=>{const c=l.split(',').map(s=>s.trim()),o={};keys.forEach((k,i)=>{if(c[i]!==undefined&&c[i]!=='')o[k]=c[i]});return o});
+const jobs=()=>csv($('jobs').value,['pid','arrival','burst','priority','deadline']);
+const show=async(id,fn)=>{try{$(id).innerHTML=await fn()}catch(e){$(id).innerHTML=`<p class="err">${esc(e.message)}</p>`}};
+const f=x=>Number.isInteger(x)?x:(+x).toFixed(3);
+function gantt(segs){const T=segs[segs.length-1].end;let h='<div class="gantt">';
+ segs.forEach(s=>{const w=(s.end-s.start)/T*100;h+=`<div class="seg" style="width:${w}%;background:${s.pid==='IDLE'?'#8a8f98':color(s.pid)}" title="${s.pid}: ${s.start}–${s.end}">${w>3.5?s.pid:''}</div>`});
+ h+='</div><div class="ticks">';segs.forEach(s=>h+=`<span style="width:${(s.end-s.start)/T*100}%">${s.start}</span>`);return h+`<span>${T}</span></div>`}
+const kv=o=>'<div class="kv">'+Object.entries(o).map(([k,v])=>`<div><span class="mu">${k}</span><b>${v}</b></div>`).join('')+'</div>';
+
+async function runSched(){await show('o-sched',async()=>{
+ const r=await call('/api/schedule',{jobs:jobs(),algorithm:$('algo').value,quantum:+$('q').value,aging_interval:+$('iv').value});
+ let h=kv({'avg waiting':f(r.avg_waiting),'avg turnaround':f(r.avg_turnaround),'avg response':f(r.avg_response),throughput:f(r.throughput),'CPU util':f(r.cpu_utilization*100)+'%','deadline misses':r.deadline_misses});
+ h+=gantt(r.gantt)+'<table><tr><th>Job</th><th>Completion</th><th>Turnaround</th><th>Waiting</th><th>Response</th><th>Deadline</th></tr>';
+ for(const[k,v]of Object.entries(r.per_process))h+=`<tr><td>${esc(k)}</td><td>${v.completion}</td><td>${v.turnaround}</td><td>${v.waiting}</td><td>${v.response}</td><td>${v.deadline_missed?'<span class="err">missed</span>':'ok'}</td></tr>`;
+ return h+'</table><p class="mu">turnaround = completion − arrival · waiting = turnaround − burst · response = first start − arrival · throughput = jobs ÷ makespan</p>'})}
+
+function weightsUI(){$('weights').innerHTML=Object.entries(PRE.weights).map(([k,v])=>`<label>${k.replace(/_/g,' ')} <input data-w="${k}" type="number" step="0.05" min="0" value="${v}" style="width:60px"></label>`).join('')}
+const weights=()=>Object.fromEntries([...document.querySelectorAll('[data-w]')].map(e=>[e.dataset.w,+e.value]));
+async function runRec(){await show('o-rec',async()=>{
+ const r=await call('/api/recommend',{jobs:jobs(),quantum:+$('q').value||4,weights:weights()});
+ const w=r.workload;let h=kv({jobs:w.job_count,'avg burst':w.avg_burst,'burst variation (CV)':w.burst_cv,'distinct priorities':w.distinct_priorities,'jobs with deadlines':w.jobs_with_deadlines});
+ h+='<table><tr><th>Algorithm</th><th>Avg wait</th><th>Avg TAT</th><th>Avg resp</th><th>Worst wait</th><th>Prio-wtd wait</th><th>Deadline miss</th><th>Throughput</th><th>Score (low=better)</th></tr>';
+ for(const n of r.ranking){const v=r.raw[n];h+=`<tr class="${n===r.recommended?'best':''}"><td>${esc(n)}${n===r.recommended?' ★':''}</td><td>${f(v.avg_waiting)}</td><td>${f(v.avg_turnaround)}</td><td>${f(v.avg_response)}</td><td>${v.max_waiting}</td><td>${f(v.priority_weighted_waiting)}</td><td>${v.deadline_misses}</td><td>${f(v.throughput)}</td><td>${r.scores[n]}<div class="bar" style="width:${Math.max(2,(1-r.scores[n])*100)}%"></div></td></tr>`}
+ return h+`</table><p><b>Why:</b> ${esc(r.explanation)}</p><div class="mu">Gantt of ${esc(r.recommended)}:</div>`+gantt(r.gantt)})}
+async function runAllPresets(){await show('o-rec',async()=>{let h='<table><tr><th>Workload</th><th>Recommended</th><th>Score</th></tr>';
+ for(const[name,txt]of Object.entries(PRE.workloads)){const r=await call('/api/recommend',{jobs:csv(txt,['pid','arrival','burst','priority','deadline']),quantum:4,weights:weights()});h+=`<tr><td>${esc(name)}</td><td><b>${esc(r.recommended)}</b></td><td>${r.scores[r.recommended]}</td></tr>`}
+ return h+'</table><p class="mu">Same engine, same weights — the recommendation depends on the job mix. Not a universal guarantee of optimality.</p>'})}
+
+async function runCluster(){await show('o-res',async()=>{
+ const js=csv($('cjobs').value,['pid','arrival','burst','priority','cpu','ram','storage']);
+ const r=await call('/api/cluster',{jobs:js,host:{cpu:+$('hc').value,ram:+$('hr').value,storage:+$('hs').value},policy:$('pol').value,aging_interval:+$('civ').value});
+ let h=kv({makespan:r.makespan,'avg wait':f(r.avg_wait),'max wait':r.max_wait,'avg CPU util':r.avg_cpu_util_pct+'%','avg RAM util':r.avg_ram_util_pct+'%','peak CPU':r.peak_cpu_pct+'%'});
+ h+='<table><tr><th>Job</th><th>Arrival</th><th>Start</th><th>End</th><th>Wait</th><th style="width:45%">Timeline</th></tr>';
+ for(const j of r.jobs)h+=`<tr><td>${esc(j.pid)}</td><td>${j.arrival}</td><td>${j.start}</td><td>${j.end}</td><td>${j.wait}</td><td><div class="track"><i style="left:${j.arrival/r.makespan*100}%;width:${(j.start-j.arrival)/r.makespan*100}%;background:#b26a00;opacity:.5"></i><i style="left:${j.start/r.makespan*100}%;width:${(j.end-j.start)/r.makespan*100}%;background:${color(j.pid)}"></i></div></td></tr>`;
+ h+='</table><p class="mu">orange = waiting for resources · colour = running</p><table><tr><th>t</th><th>Running</th><th>Waiting</th><th>CPU %</th><th>RAM %</th><th>Storage %</th></tr>';
+ for(const s of r.steps)h+=`<tr><td>${s.t}</td><td style="text-align:left">${s.running.join(', ')||'–'}</td><td style="text-align:left">${s.waiting.join(', ')||'–'}</td><td>${s.cpu_pct}</td><td>${s.ram_pct}</td><td>${s.storage_pct}</td></tr>`;
+ return h+'</table>'})}
+
+async function runBank(){await show('o-bank',async()=>{
+ const body={available:$('b-av').value.split(',').map(Number),max:JSON.parse($('b-max').value),allocation:JSON.parse($('b-al').value),pid:$('b-pid').value,request:$('b-rq').value.split(',').map(Number)};
+ const r=await call('/api/banker',body);
+ let h=`<p>Current state: <span class="badge" style="background:${r.safe?'var(--ok)':'var(--bad)'}">${r.safe?'SAFE':'UNSAFE'}</span> ${r.safe?'sequence '+r.safe_sequence.join(' → '):''}</p><table><tr><th>Need = Max − Allocation</th><th>A</th><th>B</th><th>C</th></tr>`;
+ for(const[p,v]of Object.entries(r.need))h+=`<tr><td>${esc(p)}</td>${v.map(x=>`<td>${x}</td>`).join('')}</tr>`;
+ const d=r.decision,c={GRANTED:'var(--ok)',INVALID:'var(--bad)'}[d.status]||'var(--warn)';
+ return h+`</table><p>Request ${esc(body.pid)} ${JSON.stringify(body.request)}: <span class="badge" style="background:${c}">${d.status}</span> ${esc(d.reason)} ${d.safe_sequence?'· safe order '+d.safe_sequence.join(' → '):''}</p>`})}
+
+async function runAge(){await show('o-age',async()=>{const r=await call('/api/aging_demo',{interval:+$('aiv').value});
+ return `<table><tr><th></th><th>L waits</th><th>L completes at</th></tr><tr><td>Without aging</td><td>${r.without_aging.waiting}</td><td>${r.without_aging.completion}</td></tr><tr><td>With aging (interval ${r.interval})</td><td>${r.with_aging.waiting}</td><td>${r.with_aging.completion}</td></tr></table><p class="mu">The high-priority stream ends at t=${r.stream_ends_at}. Without aging, L runs only after every high-priority job; with aging it is served far earlier (assumes finite arrivals and non-preemptive dispatch).</p>`})}
+
+const TABS=[['sched','CPU scheduling & adaptive'],['res','Resource management'],['bank',"Banker's algorithm"],['age','Starvation / aging']];
+TABS.forEach(([id,l],i)=>{const b=document.createElement('button');b.textContent=l;b.className=i?'':'on';b.onclick=()=>{TABS.forEach(([t])=>$('t-'+t).classList.toggle('hide',t!==id));[...$('tabs').children].forEach(x=>x.classList.toggle('on',x===b))};$('tabs').appendChild(b)});
+(async()=>{PRE=await (await fetch('/api/presets')).json();
+ $('preset').innerHTML=Object.keys(PRE.workloads).map(k=>`<option>${esc(k)}</option>`).join('');
+ $('preset').onchange=()=>$('jobs').value=PRE.workloads[$('preset').value];$('preset').value='Textbook (P1..P4)';$('preset').onchange();
+ $('cjobs').value=PRE.cluster;weightsUI();
+ $('b-av').value=PRE.banker.available.join(',');$('b-max').value=JSON.stringify(PRE.banker.max);$('b-al').value=JSON.stringify(PRE.banker.allocation)})();
+</script></body></html>
