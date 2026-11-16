@@ -1,24 +1,4 @@
-"""Pure CPU-scheduling logic. No database, no web framework: unit-testable on its own.
 
-Conventions
------------
-* Time is an integer number of simulation units. Simulation starts at t = 0.
-* Priority: SMALLER number = HIGHER priority (1 is best).
-* Tie-breaking (documented, deterministic):
-    FCFS      -> (arrival, pid)
-    SJF       -> (burst, arrival, pid)
-    Priority  -> (priority, arrival, pid)
-* Round Robin: a process arriving at the same instant a quantum expires is queued
-  BEFORE the pre-empted process (standard textbook rule).
-
-Formulas (per process)
-    turnaround = completion - arrival
-    waiting    = turnaround - burst
-    response   = first_start - arrival
-Aggregates
-    throughput      = n / makespan            (makespan = last completion time)
-    cpu_utilization = busy_time / makespan    (idle gaps lower it)
-"""
 from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Optional
