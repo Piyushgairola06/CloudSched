@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CloudSched — OS scheduling + DBMS cloud simulator</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#162033;--mute:#5d6b85;--line:#e1e6f0;--brand:#3b5bdb;--brand-ink:#fff;--ok:#2f9e44;--warn:#f08c00;--bad:#e03131;--soft:#eef2fb;font-family:Inter,"Segoe UI",system-ui,sans-serif}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1524;--card:#18203a;--ink:#e6ebf7;--mute:#9aa7c4;--line:#2a3558;--brand:#6c8cff;--brand-ink:#0b1020;--soft:#212b4a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-size:14px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:14px 4vw;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.brand{font-weight:800;font-size:19px;letter-spacing:-.3px}.brand span{color:var(--brand)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.chip{padding:5px 10px;border-radius:999px;background:var(--soft);font-size:12px;display:flex;gap:6px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mute)}.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}.dot.warn{background:var(--warn)}
+nav{display:flex;gap:4px;padding:10px 4vw 0;overflow-x:auto}nav button{background:none;color:var(--mute);border:0;border-bottom:3px solid transparent;border-radius:0;padding:10px 14px;font-weight:600}
+nav button.on{color:var(--brand);border-color:var(--brand)}
+main{max-width:1280px;margin:0 auto;padding:18px 4vw 60px}.tab{display:none}.tab.on{display:block}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+.grid>.card{margin-bottom:0}h2{font-size:15px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center;gap:8px}h3{font-size:13px;margin:14px 0 6px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px}
+.mute{color:var(--mute);font-size:12px}
+button{border:0;background:var(--brand);color:var(--brand-ink);padding:8px 12px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px}
+button.sec{background:var(--soft);color:var(--ink)}button.bad{background:var(--bad);color:#fff}button.sm{padding:4px 8px;font-size:12px}button:disabled{opacity:.5}
+input,select,textarea{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px;font:inherit;width:100%}textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:130px}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mute)}.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;align-items:end}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.row>label{flex:1;min-width:110px}.wide{grid-column:1/-1}
+table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--line);white-space:nowrap}th{color:var(--mute);font-size:11px;text-transform:uppercase;letter-spacing:.4px}.scroll{overflow:auto}
+.bar{height:9px;background:var(--soft);border-radius:6px;overflow:hidden;min-width:70px}.bar>i{display:block;height:100%;background:var(--brand);border-radius:6px}.bar.hot>i{background:var(--warn)}.bar.full>i{background:var(--bad)}
+.res{display:grid;grid-template-columns:70px 1fr 120px;gap:10px;align-items:center;margin:9px 0}
+.pill{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:var(--soft)}
+.pill.RUNNING{background:#d3f9d8;color:#1b6b2e}.pill.WAITING,.pill.SUBMITTED,.pill.CREATED{background:#fff3bf;color:#7a5200}.pill.COMPLETED,.pill.EXITED{background:#d0ebff;color:#0b5394}.pill.FAILED{background:#ffe3e3;color:#a61e1e}.pill.CANCELLED,.pill.STOPPED{background:#e9ecef;color:#495057}
+.vm{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}.vm b{font-size:13px}
+.kpis{display:flex;flex-wrap:wrap;gap:8px}.kpi{background:var(--soft);padding:8px 12px;border-radius:10px;min-width:84px}.kpi b{display:block;font-size:20px}
+pre{background:var(--soft);padding:10px;border-radius:8px;overflow:auto;font-size:12px;max-height:280px;margin:8px 0 0}
+svg text{fill:var(--ink);font-size:11px}.axis{stroke:var(--line)}
+#toast{position:fixed;bottom:18px;right:18px;max-width:420px;padding:12px 16px;border-radius:10px;background:var(--ink);color:var(--bg);display:none;z-index:9;box-shadow:0 8px 24px #0004}
+.note{background:var(--soft);border-left:4px solid var(--brand);padding:9px 12px;border-radius:6px;margin:10px 0;font-size:13px}
+</style></head><body>
+<header>
+  <div class="brand">Cloud<span>Sched</span> <span class="mute" style="font-weight:500">OS scheduling × MySQL DBMS × Docker</span></div>
+  <div class="chips">
+    <div class="chip"><i class="dot" id="dbDot"></i><span id="dbTxt">checking…</span></div>
+    <div class="chip"><i class="dot" id="autoDot"></i><span id="autoTxt">automation</span></div>
+    <select id="autoPolicy" style="width:auto" title="dispatch policy used by automation"><option>PRIORITY_AGING</option><option>FCFS</option><option>SJF</option><option>PRIORITY</option><option>NONE</option></select>
+    <button class="sec sm" id="autoBtn">Start automation</button><button class="sec sm" id="tickBtn">Run one cycle</button>
+    <label style="flex-direction:row;align-items:center;gap:5px"><input type="checkbox" id="live" checked style="width:auto"> live</label>
+  </div>
+</header>
+<nav id="nav"><button data-tab="overview" class="on">Overview</button><button data-tab="jobs">Jobs</button><button data-tab="lab">Scheduler lab</button><button data-tab="cluster">Cluster &amp; Banker</button><button data-tab="analytics">Analytics</button></nav>
+<main>
+<section class="tab on" id="tab-overview">
+  <div id="offline" class="note" style="display:none">MySQL is not reachable, so live data is unavailable. The <b>Scheduler lab</b> and <b>Cluster &amp; Banker</b> tabs still work (they need no database).</div>
+  <div class="grid">
+    <div class="card"><h2>Host resources <span class="mute">derived from active allocations</span></h2><div id="resBars"></div><h3>Jobs by status</h3><div class="kpis" id="kpis"></div></div>
+    <div class="card"><h2>Virtual machines <span class="mute">containers placed best-fit</span></h2><div id="vms"></div></div>
+  </div>
+  <div class="card" style="margin-top:16px"><h2>Running jobs &amp; containers</h2><div class="scroll" id="running"></div></div>
+  <div class="grid">
+    <div class="card"><h2>Waiting queue</h2><div class="scroll" id="queue"></div></div>
+    <div class="card"><h2>Recent status history <span class="mute">written by triggers</span></h2><div class="scroll" id="history"></div></div>
+  </div>
+</section>
+
+<section class="tab" id="tab-jobs">
+  <div class="card"><h2>Submit a job <span class="mute">goes through sp_submit_job (admission control)</span></h2>
+    <form id="jobForm" class="form">
+      <label>Name<input name="name" value="demo-job" required maxlength="100"></label>
+      <label>CPU cores<input name="cpu_cores" type="number" min="1" value="1" required></label>
+      <label>RAM (MB)<input name="ram_mb" type="number" min="1" value="512" required></label>
+      <label>Storage (MB)<input name="storage_mb" type="number" min="0" value="100"></label>
+      <label>Burst (est. time)<input name="est_time" type="number" min="1" value="5" required></label>
+      <label>Priority (1 = best)<input name="priority" type="number" min="1" max="10" value="3"></label>
+      <label>Arrival<input name="arrival_time" type="number" min="0" value="0"></label>
+      <label>Workload<select name="job_type"><option>CPU_BOUND</option><option>MEMORY_BOUND</option><option>IO_BOUND</option><option>MIXED</option></select></label>
+      <button type="submit">Submit</button>
+    </form></div>
+  <div class="card"><h2>OS algorithms on the live queue</h2>
+    <p class="mute" style="margin-top:-6px">Replays the current WAITING jobs through the multi-resource simulator under each dispatch policy, then ranks them.</p>
+    <div class="row"><button id="recBtn">Recommend a policy</button><button id="applyBtn" class="sec">Apply recommended policy</button>
+      <select id="dispPolicy" style="width:auto"><option>PRIORITY_AGING</option><option>FCFS</option><option>SJF</option><option>PRIORITY</option></select><button id="dispBtn" class="sec">Dispatch with this policy</button></div>
+    <div id="recOut"></div></div>
+  <div class="card"><h2>All jobs</h2><div class="scroll" id="jobsTbl"></div><div id="jobOut"></div></div>
+</section>
+
+<section class="tab" id="tab-lab">
+  <div class="card"><h2>CPU scheduling lab <span class="mute">pure OS algorithms · no database needed</span></h2>
+    <div class="form"><label class="wide">Preset<select id="labPreset"></select></label></div>
+    <label style="margin-top:10px">Workload — one job per line: <code>pid,arrival,burst,priority[,deadline]</code><textarea id="labJobs"></textarea></label>
+    <div class="row"><label>Algorithm<select id="labAlgo"><option>FCFS</option><option>SJF</option><option>PRIORITY</option><option>PRIORITY_AGING</option><option>RR</option></select></label>
+      <label>RR quantum<input id="labQ" type="number" min="1" value="4"></label><label>Aging interval<input id="labAge" type="number" min="1" value="10"></label>
+      <button id="labRun">Run &amp; draw Gantt</button><button id="labCmp" class="sec">Compare &amp; recommend</button><button id="labSave" class="sec" title="stores the comparison in MySQL (comparison_runs / algorithm_results)">Compare &amp; save to DB</button></div>
+    <div id="labOut"></div></div>
+  <div class="card"><h2>Starvation &amp; priority aging</h2><div class="row" style="margin-top:0"><label>Aging interval<input id="agIv" type="number" value="10" min="1"></label><button id="agRun" class="sec">Run demo</button></div><div id="agOut"></div></div>
+</section>
+
+<section class="tab" id="tab-cluster">
+  <div class="card"><h2>Multi-job cluster simulation <span class="mute">CPU + RAM + storage, backfilling / reservation</span></h2>
+    <label>Jobs — <code>pid,arrival,burst,priority,cpu,ram_mb,storage_mb</code><textarea id="clJobs"></textarea></label>
+    <div class="row"><label>Host CPU<input id="clCpu" type="number" value="8"></label><label>Host RAM (MB)<input id="clRam" type="number" value="16384"></label><label>Host storage (MB)<input id="clSto" type="number" value="102400"></label>
+      <label>Policy<select id="clPol"><option>FCFS</option><option>SJF</option><option>PRIORITY</option><option>PRIORITY_AGING</option></select></label><button id="clRun">Simulate</button></div>
+    <div id="clOut"></div></div>
+  <div class="card"><h2>Banker's algorithm <span class="mute">deadlock avoidance</span></h2>
+    <div class="form"><label class="wide">Available (JSON vector)<input id="bkAv"></label></div>
+    <div class="grid" style="margin-top:10px"><label>Max demand (JSON per process)<textarea id="bkMax"></textarea></label><label>Allocation (JSON per process)<textarea id="bkAl"></textarea></label></div>
+    <div class="row"><label>Process<input id="bkPid" placeholder="e.g. P1"></label><label>Request (JSON vector)<input id="bkReq" placeholder="[1,0,2]"></label><button id="bkRun">Check safety / decide request</button></div>
+    <div id="bkOut"></div></div>
+</section>
+
+<section class="tab" id="tab-analytics">
+  <div class="card"><h2>Algorithm comparisons <span class="mute">v_algorithm_comparison — saved from the lab or seeded</span></h2><div class="scroll" id="anCmp"></div></div>
+  <div class="card"><h2>Per-job scheduling metrics <span class="mute">v_job_metrics</span></h2><div class="scroll" id="anJob"></div></div>
+  <div class="card"><h2>Users</h2><div class="scroll" id="anUser"></div></div>
+</section>
+</main>
+<div id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=v=>String(v??"—").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(url,body,method){const o={method:method||(body!==undefined?"POST":"GET"),headers:{"Content-Type":"application/json"}};if(body!==undefined)o.body=JSON.stringify(body);
+  const r=await fetch(url,o);let d;try{d=await r.json()}catch{d=null}if(!r.ok)throw new Error(typeof d?.detail==="string"?d.detail:JSON.stringify(d?.detail||d||r.statusText));return d}
+let tt;function toast(m,bad){const t=$("toast");t.textContent=m;t.style.background=bad?"var(--bad)":"var(--ink)";t.style.color=bad?"#fff":"var(--bg)";t.style.display="block";clearTimeout(tt);tt=setTimeout(()=>t.style.display="none",bad?7000:3500)}
+const guard=fn=>async(...a)=>{try{await fn(...a)}catch(e){toast(e.message,true)}};
+function tbl(rows,cols){if(!rows||!rows.length)return'<p class="mute">Nothing here yet.</p>';cols=cols||Object.keys(rows[0]);
+  return"<table><thead><tr>"+cols.map(c=>`<th>${esc(c)}</th>`).join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+cols.map(c=>{const v=r[c];return`<td>${/^(status|new_status|old_status|container_status)$/.test(c)&&v?`<span class="pill ${esc(v)}">${esc(v)}</span>`:esc(typeof v==="number"?+v.toFixed(3):v)}</td>`}).join("")+"</tr>").join("")+"</tbody></table>"}
+const pct=v=>Math.max(0,Math.min(100,+v||0)),bar=(v)=>`<div class="bar ${v>=95?"full":v>=75?"hot":""}"><i style="width:${pct(v)}%"></i></div>`;
+const color=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))%360;return`hsl(${h} 62% 52%)`};
+
+/* ---------- tabs ---------- */
+$("nav").onclick=e=>{const t=e.target.dataset.tab;if(!t)return;document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b===e.target));document.querySelectorAll(".tab").forEach(s=>s.classList.toggle("on",s.id==="tab-"+t));if(t==="analytics")guard(loadAnalytics)();if(t!=="lab"&&t!=="cluster")guard(refresh)()};
+const activeTab=()=>document.querySelector("nav button.on").dataset.tab;
+
+/* ---------- live data ---------- */
+let dbUp=false;
+async function refresh(){
+  let h;try{h=await fetch("/api/health").then(r=>r.json())}catch{h={status:"error"}}
+  dbUp=h.status==="ok";$("dbDot").className="dot "+(dbUp?"ok":"bad");$("dbTxt").textContent=dbUp?"MySQL connected":"MySQL offline";$("offline").style.display=dbUp?"none":"block";
+  const au=await api("/api/automation").catch(()=>null);if(au)renderAuto(au,h);
+  if(!dbUp)return;
+  const [s,running,jobs]=await Promise.all([api("/api/dbms/summary"),api("/api/dbms/running"),api("/api/jobs?limit=200")]);
+  $("resBars").innerHTML=s.resources.map(r=>`<div class="res"><b>${esc(r.resource_type)}</b>${bar(r.utilization_pct)}<span class="mute">${esc(r.allocated)} / ${esc(r.total_capacity)} ${esc(r.unit)} (${esc(r.utilization_pct)}%)</span></div>`).join("");
+  $("kpis").innerHTML=s.jobs_by_status.map(x=>`<div class="kpi"><b>${esc(x.job_count)}</b><span class="pill ${esc(x.status)}">${esc(x.status)}</span></div>`).join("")||'<span class="mute">No jobs yet</span>';
+  $("vms").innerHTML=s.vms.map(v=>{const c=100*v.used_vcpu/v.vcpu,m=100*v.used_vram_mb/v.vram_mb;return`<div class="vm"><div style="display:flex;justify-content:space-between"><b>${esc(v.name)}</b><span class="pill ${esc(v.status)}">${esc(v.status)}</span></div>
+    <div class="res" style="grid-template-columns:48px 1fr 90px;margin:6px 0"><span class="mute">vCPU</span>${bar(c)}<span class="mute">${esc(v.used_vcpu)}/${esc(v.vcpu)}</span></div>
+    <div class="res" style="grid-template-columns:48px 1fr 90px;margin:6px 0"><span class="mute">RAM</span>${bar(m)}<span class="mute">${esc(v.used_vram_mb)}/${esc(v.vram_mb)} MB</span></div>
+    <span class="mute">${esc(v.active_containers)} active container(s)</span></div>`}).join("");
+  $("running").innerHTML=tbl(running,["job_id","name","owner","cpu_cores","ram_mb","vm_name","container_status","docker_container_id"]);
+  $("queue").innerHTML=tbl(s.waiting_queue,["job_id","name","priority","est_time","cpu_cores","ram_mb","waited_seconds"]);
+  $("history").innerHTML=tbl(s.recent_history.slice(0,12),["job_id","old_status","new_status","changed_at"]);
+  $("jobsTbl").innerHTML=jobTable(jobs);
+}
+function jobTable(jobs){if(!jobs.length)return'<p class="mute">No jobs yet.</p>';
+  return"<table><thead><tr><th>id</th><th>name</th><th>status</th><th>cpu</th><th>ram</th><th>burst</th><th>prio</th><th>type</th><th>actions</th></tr></thead><tbody>"+jobs.map(j=>{
+    const a=[];if(j.status==="WAITING"||j.status==="SUBMITTED"){a.push(["allocate","Allocate"],["banker","Banker check"],["cancel","Cancel"])}if(j.status==="RUNNING")a.push(["complete","Complete"],["fail","Fail"]);a.push(["history","History"]);
+    return`<tr><td>${j.id}</td><td>${esc(j.name)}</td><td><span class="pill ${j.status}">${j.status}</span></td><td>${j.cpu_cores}</td><td>${j.ram_mb}</td><td>${j.est_time}</td><td>${j.priority}</td><td>${esc(j.job_type)}</td><td>${a.map(([k,l])=>`<button class="sm ${k==="fail"||k==="cancel"?"bad":"sec"}" data-act="${k}" data-id="${j.id}">${l}</button>`).join(" ")}</td></tr>`}).join("")+"</tbody></table>"}
+$("jobsTbl").onclick=guard(async e=>{const b=e.target.closest("button[data-act]");if(!b)return;const id=b.dataset.id,k=b.dataset.act;let r;
+  if(k==="history")r=await api("/api/dbms/history/"+id);else if(k==="banker")r=await api("/api/bridge/banker/"+id);else r=await api(`/api/jobs/${id}/${k}`,{});
+  $("jobOut").innerHTML=`<pre>${esc(JSON.stringify(r,null,2))}</pre>`;
+  if(k==="banker")toast(r.agree?"Python Banker's and the SQL procedure AGREE":"They DISAGREE — investigate!",!r.agree);
+  if(k==="allocate")toast(r.result+(r.vm_id?` · placed in VM ${r.vm_id}`:""));await refresh()});
+$("jobForm").onsubmit=guard(async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));for(const k of["cpu_cores","ram_mb","storage_mb","est_time","priority","arrival_time"])f[k]=+f[k];
+  const j=await api("/api/jobs",f);toast(`Job ${j.id} submitted (${j.status})`);await refresh()});
+
+/* ---------- automation ---------- */
+function renderAuto(a,h){const on=a.running;$("autoDot").className="dot "+(a.last_error?"bad":on?"ok":"warn");
+  $("autoTxt").textContent=`${a.executor} · automation ${on?"ON ("+a.policy+")":"off"}${a.last_error?" · error":""}`;$("autoTxt").title=a.last_error||"";
+  $("autoBtn").textContent=on?"Stop automation":"Start automation";if(on)$("autoPolicy").value=a.policy}
+$("autoBtn").onclick=guard(async()=>{const on=$("autoBtn").textContent.startsWith("Stop");
+  const a=on?await api("/api/automation/stop",{}):await api("/api/automation/start?policy="+$("autoPolicy").value,{});toast(on?"Automation stopped":"Automation running");await refresh()});
+$("tickBtn").onclick=guard(async()=>{const r=await api("/api/automation/tick",{});const x=r.result;toast(`cycle: ${x.finished.length} finished · ${x.dispatched} dispatched · ${x.placed.length} placed · ${x.launched.length} launched`);await refresh()});
+
+/* ---------- OS recommendation on the live queue ---------- */
+function recView(r){if(!r.recommended)return`<div class="note">${esc(r.explanation)}</div>`;
+  return`<div class="note"><b>${esc(r.recommended)}</b> — ${esc(r.explanation)}</div>`+tbl(r.ranking.map(p=>({policy:p,score:r.scores[p],...r.raw[p]})))}
+$("recBtn").onclick=guard(async()=>{$("recOut").innerHTML=recView(await api("/api/bridge/recommend-policy"))});
+$("applyBtn").onclick=guard(async()=>{const r=await api("/api/bridge/apply-recommended",{});$("recOut").innerHTML=recView(r.recommendation)+(r.result?`<pre>${esc(JSON.stringify(r.result,null,2))}</pre>`:"");await refresh()});
+$("dispBtn").onclick=guard(async()=>{const r=await api("/api/jobs/dispatch?policy="+$("dispPolicy").value,{});toast(`${r.policy}: ${r.started_jobs} job(s) started — run a cycle to place/launch them`);await refresh()});
+
+/* ---------- Gantt ---------- */
+function gantt(segs,{byJob=false}={}){if(!segs.length)return"";const end=Math.max(...segs.map(s=>s.end)),W=900,L=byJob?60:10,sc=(W-L-10)/end;
+  const rows=byJob?[...new Set(segs.map(s=>s.pid))]:["CPU"],H=rows.length*26+34;let o=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img">`;
+  segs.forEach(s=>{const y=(byJob?rows.indexOf(s.pid):0)*26+6,x=L+s.start*sc,w=Math.max(1,(s.end-s.start)*sc);
+    o+=`<rect x="${x}" y="${y}" width="${w}" height="20" rx="4" fill="${s.pid==="IDLE"?"#adb5bd":color(s.pid)}"><title>${esc(s.pid)} ${s.start}–${s.end}</title></rect>`;
+    if(w>22)o+=`<text x="${x+w/2}" y="${y+14}" text-anchor="middle" fill="#fff" style="fill:#fff">${esc(s.pid)}</text>`});
+  if(byJob)rows.forEach((r,i)=>o+=`<text x="2" y="${i*26+20}">${esc(r)}</text>`);
+  const st=Math.max(1,Math.ceil(end/16));for(let t=0;t<=end;t+=st)o+=`<line class="axis" x1="${L+t*sc}" x2="${L+t*sc}" y1="${H-26}" y2="${H-20}"/><text x="${L+t*sc}" y="${H-8}" text-anchor="middle">${t}</text>`;
+  return o+"</svg>"}
+const metrics=r=>`<div class="kpis">${[["avg wait",r.avg_waiting],["avg turnaround",r.avg_turnaround],["avg response",r.avg_response],["max wait",r.max_waiting],["CPU util",(r.cpu_utilization*100).toFixed(0)+"%"],["deadline misses",r.deadline_misses]].map(([k,v])=>`<div class="kpi"><b>${typeof v==="number"?+v.toFixed(2):v}</b><span class="mute">${k}</span></div>`).join("")}</div>`;
+
+/* ---------- scheduler lab ---------- */
+let presets;
+const parseJobs=t=>t.trim().split("\n").filter(l=>l.trim()).map(l=>{const [pid,arrival,burst,priority,deadline]=l.split(",").map(x=>x.trim());return{pid,arrival,burst,priority:priority||5,deadline:deadline||null}});
+async function loadPresets(){presets=await api("/api/os/presets");const sel=$("labPreset");sel.innerHTML=Object.keys(presets.workloads).map(k=>`<option>${esc(k)}</option>`).join("");sel.onchange=()=>$("labJobs").value=presets.workloads[sel.value];sel.value="Textbook (P1..P4)";sel.onchange();
+  $("clJobs").value=presets.cluster;const b=presets.banker;$("bkAv").value=JSON.stringify(b.available);$("bkMax").value=JSON.stringify(b.max,null,1);$("bkAl").value=JSON.stringify(b.allocation,null,1)}
+const labBody=()=>({jobs:parseJobs($("labJobs").value),algorithm:$("labAlgo").value,quantum:+$("labQ").value,aging_interval:+$("labAge").value});
+$("labRun").onclick=guard(async()=>{const r=await api("/api/os/schedule",labBody());
+  const per=Object.entries(r.per_process).map(([pid,v])=>({pid,...v}));$("labOut").innerHTML=`<h3>Gantt — ${esc($("labAlgo").value)}</h3>${gantt(r.gantt)}${metrics(r)}<h3>Per process</h3>${tbl(per)}`});
+async function compare(save){const body={...labBody(),weights:null};const r=save?await api("/api/bridge/compare",body):await api("/api/os/recommend",body);
+  const rows=r.ranking.map(n=>({algorithm:n,score:r.scores[n],avg_waiting:r.raw[n].avg_waiting,max_waiting:r.raw[n].max_waiting,avg_response:r.raw[n].avg_response,deadline_misses:r.raw[n].deadline_misses}));
+  $("labOut").innerHTML=`<div class="note"><b>${esc(r.recommended)}</b> recommended. ${esc(r.explanation)}${save?` <b>Saved as comparison #${r.comparison_id}.</b>`:""}</div>${tbl(rows)}<h3>Gantt of the winner</h3>${gantt(r.gantt)}`;if(save)toast("Saved to MySQL")}
+$("labCmp").onclick=guard(()=>compare(false));$("labSave").onclick=guard(()=>compare(true));
+$("agRun").onclick=guard(async()=>{const r=await api("/api/os/aging",{interval:+$("agIv").value});$("agOut").innerHTML=`<div class="note">A low-priority job <b>L</b> competes with a stream of 100 high-priority jobs ending at t=${r.stream_ends_at}.</div>`+tbl([{mode:"without aging",L_completes_at:r.without_aging.completion,L_waited:r.without_aging.waiting},{mode:`aging every ${r.interval}`,L_completes_at:r.with_aging.completion,L_waited:r.with_aging.waiting}])});
+
+/* ---------- cluster + banker ---------- */
+$("clRun").onclick=guard(async()=>{const jobs=$("clJobs").value.trim().split("\n").filter(l=>l.trim()).map(l=>{const [pid,arrival,burst,priority,cpu,ram,storage]=l.split(",").map(x=>x.trim());return{pid,arrival,burst,priority,cpu,ram,storage}});
+  const r=await api("/api/os/cluster",{jobs,host:{cpu:+$("clCpu").value,ram:+$("clRam").value,storage:+$("clSto").value},policy:$("clPol").value});
+  const segs=r.jobs.map(j=>({pid:j.pid,start:j.start,end:j.end}));
+  $("clOut").innerHTML=`<h3>Jobs running concurrently</h3>${gantt(segs,{byJob:true})}<div class="kpis"><div class="kpi"><b>${r.makespan}</b><span class="mute">makespan</span></div><div class="kpi"><b>${r.avg_wait.toFixed(2)}</b><span class="mute">avg wait</span></div><div class="kpi"><b>${r.max_wait}</b><span class="mute">max wait</span></div><div class="kpi"><b>${r.avg_cpu_util_pct}%</b><span class="mute">avg CPU</span></div><div class="kpi"><b>${r.peak_cpu_pct}%</b><span class="mute">peak CPU</span></div></div><h3>Timeline</h3>${tbl(r.steps.map(s=>({t:s.t,cpu_pct:s.cpu_pct,ram_pct:s.ram_pct,running:s.running.join(" "),waiting:s.waiting.join(" ")})))}`});
+$("bkRun").onclick=guard(async()=>{const body={available:JSON.parse($("bkAv").value),max:JSON.parse($("bkMax").value),allocation:JSON.parse($("bkAl").value)};
+  if($("bkPid").value){body.pid=$("bkPid").value;body.request=JSON.parse($("bkReq").value||"[]")}
+  const r=await api("/api/os/banker",body);const need=Object.entries(r.need).map(([p,v])=>({process:p,need:JSON.stringify(v)}));
+  $("bkOut").innerHTML=`<div class="note">State is <b>${r.safe?"SAFE":"UNSAFE"}</b>${r.safe?" — safe sequence: "+esc(r.safe_sequence.join(" → ")):""}</div>${r.decision?`<div class="note"><b>${esc(r.decision.status)}</b> — ${esc(r.decision.reason)}${r.decision.safe_sequence?" ("+esc(r.decision.safe_sequence.join(" → "))+")":""}</div>`:""}<h3>Need = Max − Allocation</h3>${tbl(need)}`});
+
+/* ---------- analytics ---------- */
+async function loadAnalytics(){if(!dbUp){return}const a=await api("/api/dbms/analytics");$("anCmp").innerHTML=tbl(a.algorithm_comparison);$("anJob").innerHTML=tbl(a.job_metrics);$("anUser").innerHTML=tbl(a.users)}
+
+/* ---------- boot ---------- */
+guard(loadPresets)();guard(refresh)();
+setInterval(()=>{if($("live").checked&&["overview","jobs"].includes(activeTab()))refresh().catch(()=>{})},3000);
+</script></body></html>

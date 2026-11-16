@@ -1,0 +1,30 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r backend/requirements.txt
+      - run: cd backend && python -m pytest -q          # OS algorithms, API (SQLite), workloads, executors, bridge
+  mysql-integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env: {MYSQL_ROOT_PASSWORD: root}
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot --silent" --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r backend/requirements.txt
+      - run: cd database && mysql -h 127.0.0.1 -uroot -proot < install.sql
+      - name: automation test first (needs the fresh seed), then the concurrency test
+        env:
+          MYSQL_TEST_URL: mysql+pymysql://root:root@127.0.0.1:3306/cloudsched
+        run: cd backend && python -m pytest -v tests/test_automation_mysql.py tests/test_mysql_concurrency.py

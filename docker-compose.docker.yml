@@ -1,0 +1,9 @@
+# Override: run every job as a real Docker container (cpu/memory limits taken from the job).
+# WARNING: mounting the Docker socket gives the API root-equivalent control over the host's Docker daemon.
+# Only use on a dev machine / VM. Pull the workload image once first:  docker pull python:3.12-alpine
+services:
+  api:
+    environment:
+      EXECUTOR_MODE: docker
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

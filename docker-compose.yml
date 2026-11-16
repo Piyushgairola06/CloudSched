@@ -1,0 +1,38 @@
+# docker compose up --build            -> MySQL + API + UI on http://localhost:8000   (jobs are SIMULATED, no Docker access needed)
+# docker compose -f docker-compose.yml -f docker-compose.docker.yml up --build   -> jobs run as REAL containers
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-cloudsched}
+    volumes:
+      - dbdata:/var/lib/mysql
+      # Run once, only on an EMPTY volume (docker compose down -v to reinstall). The entrypoint pipes them through the
+      # mysql client, which understands DELIMITER. install.sql / schema.sql / 06 / 07 are deliberately not mounted.
+      - ./database/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./database/02_views.sql:/docker-entrypoint-initdb.d/02_views.sql:ro
+      - ./database/03_procedures.sql:/docker-entrypoint-initdb.d/03_procedures.sql:ro
+      - ./database/04_triggers.sql:/docker-entrypoint-initdb.d/04_triggers.sql:ro
+      - ./database/05_seed_data.sql:/docker-entrypoint-initdb.d/05_seed_data.sql:ro
+    ports:
+      - "127.0.0.1:3307:3306"          # for MySQL Workbench; remove if you do not need it
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+  api:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql+pymysql://root:${MYSQL_ROOT_PASSWORD:-cloudsched}@db:3306/cloudsched
+      EXECUTOR_MODE: simulate
+      TIME_SCALE: ${TIME_SCALE:-1}                   # real seconds per simulation unit
+      AUTOMATION_ENABLED: ${AUTOMATION_ENABLED:-true}
+      AUTOMATION_POLICY: ${AUTOMATION_POLICY:-PRIORITY_AGING}
+    ports:
+      - "8000:8000"
+volumes:
+  dbdata:
