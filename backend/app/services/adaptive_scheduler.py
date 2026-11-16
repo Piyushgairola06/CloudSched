@@ -1,14 +1,4 @@
-"""Rule-based adaptive scheduler: run every candidate on the SAME workload, normalise each metric to
-0..1 (0 = best candidate, 1 = worst), combine with configurable weights, pick the lowest score.
 
-Normalisation (per metric, across candidates): badness = (v - min) / (max - min); if max == min -> 0.
-For throughput (higher is better) badness = (max - v) / (max - min).
-Fairness / starvation: `max_waiting` (the worst-treated job) is a scored metric, so an algorithm that
-starves one job is penalised even if its AVERAGE waiting is the best (this is why SJF is not auto-picked).
-Priority: `priority_weighted_waiting` weights each job's wait by (11 - priority).
-Deadlines: `deadline_misses` is scored. Rule: effective weight = base + 0.30 * (fraction of jobs that have a
-deadline), so deadlines matter more when more of the workload is deadline-bound; with no deadlines it is 0.
-The result is a recommendation on SIMULATED metrics for this workload, not a universal optimum."""
 import statistics
 
 from app.services.scheduling_algorithms import fcfs, priority_np, round_robin, sjf
