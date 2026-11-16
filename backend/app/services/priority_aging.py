@@ -1,10 +1,4 @@
-"""Priority aging (starvation prevention). Smaller number = higher priority.
 
-effective_priority = max(best, base - floor(waited / interval) * step)
-A job that has waited `interval` units gets `step` better. With finite jobs ahead of it, a
-waiting job eventually reaches `best` and then wins ties through its earlier arrival time.
-Assumption: finite job supply and non-preemptive dispatch; it is a guarantee under those rules only.
-"""
 from app.services.scheduling_algorithms import run_nonpreemptive
 
 
